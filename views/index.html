@@ -44,7 +44,7 @@
 
             <div id="result" style="margin-top: 20px; display: none;">
                 <div class="link-box">
-                    <span id="linkText">anonymous-chat-omega.vercel.app/ask/</span>
+                    <span id="linkText">https://anonymous-chat-omega.vercel.app/ask/</span>
                     <button onclick="copyLink()">copy link</button>
                 </div>
 
@@ -71,7 +71,6 @@
 
     <script>
         let currentUsername = '';
-        const BASE_URL = '{{BASE_URL}}';
 
         async function register() {
             const username = document.getElementById('username').value.trim();
@@ -95,36 +94,39 @@
                 
                 if (data.success) {
                     currentUsername = data.username;
-                    document.getElementById('linkText').textContent = `${BASE_URL}/ask/${data.username}`;
+                    document.getElementById('linkText').textContent = `https://anonymous-chat-omega.vercel.app/ask/${data.username}`;
                     document.getElementById('result').style.display = 'block';
                     
+                    // Redirect ke inbox setelah 2 detik
                     setTimeout(() => {
                         window.location.href = data.redirect;
                     }, 2000);
                 } else {
-                    alert(data.error);
+                    alert(data.error || 'Terjadi kesalahan');
+                    btn.disabled = false;
+                    btn.textContent = 'Buat Link!';
                 }
             } catch (error) {
-                alert('Gagal. Coba lagi.');
-            } finally {
+                alert('Gagal koneksi ke server');
+                console.error(error);
                 btn.disabled = false;
                 btn.textContent = 'Buat Link!';
             }
         }
 
         function copyLink() {
-            const link = `${BASE_URL}/ask/${currentUsername}`;
+            const link = `https://anonymous-chat-omega.vercel.app/ask/${currentUsername}`;
             navigator.clipboard.writeText(link);
             alert('Link copied!');
         }
 
         function shareIG() {
-            const link = `${BASE_URL}/ask/${currentUsername}`;
+            const link = `https://anonymous-chat-omega.vercel.app/ask/${currentUsername}`;
             window.open(`https://www.instagram.com/create/story/?link=${encodeURIComponent(link)}`);
         }
 
         function shareWA() {
-            const link = `${BASE_URL}/ask/${currentUsername}`;
+            const link = `https://anonymous-chat-omega.vercel.app/ask/${currentUsername}`;
             const text = `Tanya apa aja, anonim! ${link}`;
             window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
         }
