@@ -43,10 +43,6 @@
             margin: 20px 0;
             font-size: 0.9rem;
         }
-        .instagram-note img {
-            width: 24px;
-            height: 24px;
-        }
         .features {
             display: flex;
             justify-content: space-around;
@@ -93,13 +89,13 @@
             
             <div class="error-message" id="errorMessage"></div>
             
-            <form id="loginForm">
+            <form method="POST" action="/login" id="loginForm">
                 <div class="form-group">
                     <input 
                         type="text" 
                         id="username" 
                         name="username" 
-                        placeholder="Masukkan username kamu" 
+                        placeholder="Contoh: johndoe" 
                         required 
                         autofocus
                         style="text-align: center; font-size: 1.2rem;"
@@ -162,19 +158,23 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ username })
+                    body: JSON.stringify({ username }),
+                    redirect: 'manual' // Penting!
                 });
                 
                 if (response.redirected) {
+                    // Redirect ke halaman chat
                     window.location.href = response.url;
                 } else {
+                    // Jika error, parse JSON
                     const data = await response.json();
                     showError(data.error || 'Terjadi kesalahan');
                     loginBtn.disabled = false;
                     loginBtn.textContent = 'Mulai Chat Anonymous';
                 }
             } catch (error) {
-                showError('Error: ' + error.message);
+                console.error('Error:', error);
+                showError('Terjadi kesalahan koneksi');
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Mulai Chat Anonymous';
             }
