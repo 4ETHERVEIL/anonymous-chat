@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@{{username}} - Inbox</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="header">
+        <a href="/" style="color:white;">← Home</a>
+        <h1>📱 NGL</h1>
+        <form method="POST" action="/logout" style="display:inline;">
+            <button type="submit" style="background:#e41e3f; width:auto; padding:8px 15px;">Logout</button>
+        </form>
+    </div>
+
+    <div class="inbox-header">
+        <h2>@{{username}}</h2>
+        <p>tanya apa aja, anonim</p>
+    </div>
+
+    <div class="container">
+        <div class="stats-box">
+            <div>📨 Total: <span id="totalCount">{{total}}</span></div>
+            <div>📬 Baru: <span id="unreadCount">{{unread}}</span></div>
+        </div>
+
+        <div class="link-box" style="margin-bottom:20px;">
+            <span>{{BASE_URL}}/ask/{{username}}</span>
+            <button onclick="copyLink()">copy link</button>
+        </div>
+
+        <div id="messages">
+            {{messages}}
+        </div>
+    </div>
+
+    <!-- Modal Balas -->
+    <div id="answerModal" class="answer-modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom:15px;">Balas Pesan</h3>
+            <div class="form-group">
+                <textarea id="answerText" rows="4" placeholder="Tulis balasan..."></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="sendAnswer()" style="flex:2;">Kirim</button>
+                <button onclick="closeModal()" style="flex:1; background:#999;">Batal</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMessageId = null;
+        const BASE_URL = '{{BASE_URL}}';
+
+        function copyLink() {
+            const link = `${BASE_URL}/ask/{{username}}`;
+            navigator.clipboard.writeText(link);
+            alert('Link copied!');
+        }
+
+        function answerMessage(id) {
+            currentMessageId = id;
+            document.getElementById('answerModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('answerModal').style.display = 'none';
+            document.getElementById('answerText').value = '';
+        }
+
+        async function sendAnswer() {
+            const answer = document.getElementById('answerText').value.trim();
+            if (!answer) {
+                alert('Balasan tidak boleh kosong');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/answer/${currentMessageId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ answer })
+                });
+
+                if (response.ok) {
+                    location.reload();
+                }
+            } catch (error) {
+                alert('Gagal mengirim balasan');
+            }
+        }
+
+        // Cek pesan baru setiap 5 detik
+        setInterval(async () => {
+            try {
+                const response = await fetch(`/api/messages/{{username}}`);
+                const data = await response.json();
+                const unreadSpan = document.getElementById('unreadCount');
+                if (unreadSpan && data.unread > 0) {
+                    unreadSpan.textContent = data.unread;
+                    document.title = `(${data.unread}) @{{username}} - Inbox`;
+                }
+            } catch (error) {}
+        }, 5000);
+
+        // Tutup modal jika klik di luar
+        window.onclick = function(event) {
+            const modal = document.getElementById('answerModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
