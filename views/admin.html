@@ -13,14 +13,14 @@
             <div class="nav-links">
                 <a href="/admin">Dashboard</a>
                 <form method="POST" action="/admin/logout" style="display: inline;">
-                    <button type="submit" class="btn-danger" style="padding: 8px 16px; width: auto;">Logout</button>
+                    <button type="submit" class="btn-danger" style="padding: 10px 20px; width: auto;">Logout</button>
                 </form>
             </div>
         </div>
     </div>
 
     <div class="container">
-        <h2 style="margin-bottom: 20px;">📨 Semua Percakapan</h2>
+        <h2 style="margin-bottom: 25px;">📨 Semua Percakapan</h2>
         
         <div id="conversationsList">
             {{conversations}}
@@ -28,11 +28,17 @@
     </div>
 
     <script>
-        // Auto refresh untuk notifikasi pesan baru
-        setInterval(async () => {
-            // Reload halaman setiap 30 detik
+        // Auto refresh setiap 30 detik untuk cek pesan baru
+        setTimeout(() => {
             window.location.reload();
         }, 30000);
+
+        // Konfirmasi logout
+        document.querySelector('form[action="/admin/logout"]').addEventListener('submit', (e) => {
+            if (!confirm('Yakin ingin logout?')) {
+                e.preventDefault();
+            }
+        });
     </script>
 </body>
 </html>
