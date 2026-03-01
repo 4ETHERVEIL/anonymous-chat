@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGL Pro - Upgrade Membership</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .pricing-container {
+            display: flex;
+            gap: 20px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .pricing-card {
+            flex: 1;
+            min-width: 250px;
+            background: white;
+            border-radius: 30px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .pricing-card:hover {
+            transform: translateY(-10px);
+        }
+        .pricing-card.popular {
+            border: 3px solid #fbbf24;
+            transform: scale(1.05);
+        }
+        .popular-badge {
+            position: absolute;
+            top: 20px;
+            right: -30px;
+            background: #fbbf24;
+            color: white;
+            padding: 5px 40px;
+            transform: rotate(45deg);
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .price {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 20px 0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .price small {
+            font-size: 1rem;
+            color: #999;
+        }
+        .features {
+            list-style: none;
+            margin: 20px 0;
+        }
+        .features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .features li:last-child {
+            border-bottom: none;
+        }
+        .features li.disabled {
+            color: #ccc;
+            text-decoration: line-through;
+        }
+        .pro-badge-large {
+            display: inline-block;
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .testimonial {
+            background: #f8f9fa;
+            border-radius: 20px;
+            padding: 20px;
+            margin: 30px 0;
+            font-style: italic;
+        }
+        .money-back {
+            text-align: center;
+            color: #666;
+            margin-top: 30px;
+            padding: 20px;
+            border-top: 2px dashed #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <h2>📱 NGL Clone</h2>
+            <div class="nav-links">
+                <a href="/chat/{{sessionId}}">← Kembali ke Chat</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <span class="pro-badge-large">✨ NGL PRO ✨</span>
+            <h1 style="font-size: 2.5rem; margin-bottom: 15px;">Ungkap Identitas Pengirim</h1>
+            <p style="color: #666; font-size: 1.2rem; max-width: 600px; margin: 0 auto;">
+                Seperti NGL asli! Dapatkan hint tentang siapa yang mengirim pesan anonymous
+            </p>
+        </div>
+
+        <div class="pricing-container">
+            <!-- Free Plan -->
+            <div class="pricing-card">
+                <h2>Free</h2>
+                <div class="price">$0 <small>/bulan</small></div>
+                <ul class="features">
+                    <li>✅ Kirim pesan anonymous</li>
+                    <li>✅ Terima pesan unlimited</li>
+                    <li>✅ Auto-refresh realtime</li>
+                    <li class="disabled">❌ Tidak bisa lihat hint pengirim</li>
+                    <li class="disabled">❌ Tidak ada info lokasi</li>
+                    <li class="disabled">❌ Tidak ada info device</li>
+                </ul>
+                <button onclick="window.location.href='/chat/{{sessionId}}'" style="background: #ccc;">Current Plan</button>
+            </div>
+
+            <!-- Pro Plan -->
+            <div class="pricing-card popular">
+                <div class="popular-badge">POPULAR</div>
+                <h2>⭐ NGL Pro</h2>
+                <div class="price">$9.99 <small>/bulan</small></div>
+                <ul class="features">
+                    <li>✅ Semua fitur Free</li>
+                    <li>✅ Lihat lokasi pengirim (kota, negara)</li>
+                    <li>✅ Lihat tipe HP/device pengirim</li>
+                    <li>✅ Lihat ISP / provider internet</li>
+                    <li>✅ Lihat IP address (anonim)</li>
+                    <li>✅ 30% lebih banyak pesan auto-generated</li>
+                    <li>✅ Prioritas support</li>
+                </ul>
+                <form method="POST" action="/upgrade/pro">
+                    <button type="submit" style="background: linear-gradient(135deg, #fbbf24, #f59e0b);">
+                        Upgrade Sekarang
+                    </button>
+                </form>
+            </div>
+
+            <!-- Annual Plan -->
+            <div class="pricing-card">
+                <h2>📅 Pro Annual</h2>
+                <div class="price">$99.99 <small>/tahun</small></div>
+                <small style="color: #4caf50;">+2 bulan gratis</small>
+                <ul class="features">
+                    <li>✅ Semua fitur Pro bulanan</li>
+                    <li>✅ Hemat 17%</li>
+                    <li>✅ 2 bulan gratis</li>
+                    <li>✅ Early access fitur baru</li>
+                </ul>
+                <button style="background: linear-gradient(135deg, #667eea, #764ba2);">Hubungi Kami</button>
+            </div>
+        </div>
+
+        <div class="testimonial">
+            <p>"Setelah upgrade ke Pro, aku jadi tahu kalau pesan-pesan itu ternyata dari mantan! Worth it banget."</p>
+            <p style="margin-top: 10px; color: #666;">— @user123, Pro Member</p>
+        </div>
+
+        <div class="testimonial">
+            <p>"Fitur hint-nya akurat banget. Bisa lihat lokasi dan device pengirim. Recommended!"</p>
+            <p style="margin-top: 10px; color: #666;">— @anonymous_fan, 3 bulan Pro</p>
+        </div>
+
+        <div class="money-back">
+            <h3>💯 Garansi Uang Kembali 7 Hari</h3>
+            <p>Tidak puas dengan fitur Pro? Kami akan refund 100% dalam 7 hari pertama.</p>
+        </div>
+
+        <div style="text-align: center; margin: 40px 0;">
+            <h3>✨ Apa Kata Pengguna Pro?</h3>
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">
+                <span>⭐⭐⭐⭐⭐</span>
+                <span>4.8/5 (1.2k+ reviews)</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tracking untuk conversion
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', (e) => {
+                if (!confirm('Lanjutkan ke pembayaran? (Mode simulasi)')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
