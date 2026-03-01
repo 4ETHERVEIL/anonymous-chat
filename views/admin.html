@@ -28,12 +28,10 @@
     </div>
 
     <script>
-        // Auto refresh setiap 30 detik untuk cek pesan baru
         setTimeout(() => {
             window.location.reload();
         }, 30000);
 
-        // Konfirmasi logout
         document.querySelector('form[action="/admin/logout"]').addEventListener('submit', (e) => {
             if (!confirm('Yakin ingin logout?')) {
                 e.preventDefault();
