@@ -140,4 +140,51 @@
             const username = usernameInput.value.trim();
             
             if (!username) {
-                showError('Username tidak boleh kosong
+                showError('Username tidak boleh kosong!');
+                return;
+            }
+            
+            if (username.length < 3) {
+                showError('Username minimal 3 karakter');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Memproses...';
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username }),
+                    redirect: 'manual'
+                });
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    const data = await response.json();
+                    showError(data.error || 'Terjadi kesalahan');
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Mulai Chat Anonymous';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Terjadi kesalahan koneksi');
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Mulai Chat Anonymous';
+            }
+        });
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
