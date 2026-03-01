@@ -3,65 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Detail Percakapan</title>
+    <title>Detail Percakapan</title>
     <link rel="stylesheet" href="/style.css">
-    <style>
-        .sender-info {
-            background: rgba(0,0,0,0.05);
-            border-radius: 8px;
-            padding: 8px;
-            margin-top: 8px;
-            font-size: 0.8rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .sender-info small {
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .user-meta {
-            background: linear-gradient(135deg, #667eea10, #764ba210);
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-    </style>
 </head>
 <body>
     <div class="nav-bar">
         <div class="nav-content">
-            <h2>📊 Admin Dashboard</h2>
-            <div class="nav-links">
-                <a href="/admin" class="back-btn">← Kembali</a>
-                <form method="POST" action="/admin/logout" style="display: inline;">
-                    <button type="submit" class="btn-danger" style="padding: 10px 20px; width: auto;">Logout</button>
-                </form>
-            </div>
+            <h2>💬 Detail</h2>
+            <a href="/admin" style="color:#667eea;">← Kembali</a>
         </div>
     </div>
 
     <div class="container">
-        <div class="user-meta">
-            <h3>👤 User: @{{username}}</h3>
-            <p><strong>Status:</strong> {{isPro}}</p>
-            <p><strong>Dimulai:</strong> {{createdAt}}</p>
-        </div>
-        
         <div class="card">
-            <h3>💬 Riwayat Pesan</h3>
-            <div id="messagesContainer" class="messages-container">
+            <div id="messages" class="messages-container">
                 {{messages}}
             </div>
         </div>
-        
+
         <div class="card">
-            <h3>✏️ Balas Pesan</h3>
             <form method="POST" action="/admin/reply/{{conversationId}}">
                 <div class="form-group">
-                    <textarea name="message" rows="4" placeholder="Ketik balasanmu di sini..." required></textarea>
+                    <textarea name="message" rows="3" placeholder="Balasan..." required></textarea>
                 </div>
                 <button type="submit">Kirim Balasan</button>
             </form>
@@ -69,14 +32,8 @@
     </div>
 
     <script>
-        const container = document.getElementById('messagesContainer');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
-
-        setInterval(() => {
-            window.location.reload();
-        }, 10000);
+        document.getElementById('messages').scrollTop = 9999;
+        setTimeout(() => location.reload(), 5000);
     </script>
 </body>
 </html>
