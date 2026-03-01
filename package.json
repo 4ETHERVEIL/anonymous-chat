@@ -1,7 +1,7 @@
 {
   "name": "ngl-clone",
   "version": "1.0.0",
-  "description": "NGL Anonymous Messaging",
+  "description": "NGL Clone - Anonymous Q&A",
   "scripts": {
     "vercel-build": "echo 'Build complete'"
   },
