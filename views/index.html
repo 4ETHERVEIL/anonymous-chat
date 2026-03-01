@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NGL Clone - Tanya Apa Saja, Anonim</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+        .error-box {
+            background: #f44336;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
     <div class="header">
@@ -35,6 +58,8 @@
                     <div>Terima pertanyaan anonymous</div>
                 </div>
             </div>
+
+            <div id="errorDisplay" class="error-box"></div>
 
             <div class="form-group">
                 <input type="text" id="username" placeholder="Username kamu (contoh: zycho1_)" style="text-align: center;">
@@ -74,23 +99,38 @@
 
         async function register() {
             const username = document.getElementById('username').value.trim();
+            const errorBox = document.getElementById('errorDisplay');
+            const btn = document.getElementById('registerBtn');
+            
+            // Reset error
+            errorBox.style.display = 'none';
+            
             if (!username) {
-                alert('Masukkan username dulu!');
+                showError('Masukkan username dulu!');
                 return;
             }
 
-            const btn = document.getElementById('registerBtn');
+            if (username.length < 3) {
+                showError('Username minimal 3 karakter');
+                return;
+            }
+
             btn.disabled = true;
-            btn.textContent = 'Memproses...';
+            btn.innerHTML = '<span class="loading"></span> Memproses...';
 
             try {
+                console.log('Mengirim request untuk username:', username);
+                
                 const response = await fetch('/register', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ username })
                 });
 
                 const data = await response.json();
+                console.log('Response:', data);
                 
                 if (data.success) {
                     currentUsername = data.username;
@@ -102,22 +142,36 @@
                         window.location.href = data.redirect;
                     }, 2000);
                 } else {
-                    alert(data.error || 'Terjadi kesalahan');
+                    showError(data.error || 'Terjadi kesalahan');
                     btn.disabled = false;
                     btn.textContent = 'Buat Link!';
                 }
             } catch (error) {
-                alert('Gagal koneksi ke server');
-                console.error(error);
+                console.error('Error detail:', error);
+                showError('Gagal koneksi ke server. Cek koneksi internet Anda.');
                 btn.disabled = false;
                 btn.textContent = 'Buat Link!';
             }
         }
 
+        function showError(message) {
+            const errorBox = document.getElementById('errorDisplay');
+            errorBox.textContent = message;
+            errorBox.style.display = 'block';
+            
+            // Auto hide setelah 5 detik
+            setTimeout(() => {
+                errorBox.style.display = 'none';
+            }, 5000);
+        }
+
         function copyLink() {
             const link = `https://anonymous-chat-omega.vercel.app/ask/${currentUsername}`;
-            navigator.clipboard.writeText(link);
-            alert('Link copied!');
+            navigator.clipboard.writeText(link).then(() => {
+                alert('Link copied!');
+            }).catch(() => {
+                alert('Gagal copy link');
+            });
         }
 
         function shareIG() {
@@ -130,6 +184,21 @@
             const text = `Tanya apa aja, anonim! ${link}`;
             window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
         }
+
+        // Test koneksi saat halaman dimuat
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/api/test');
+                const data = await response.json();
+                console.log('Connection test:', data);
+                
+                if (data.status === 'ERROR') {
+                    showError('Koneksi database bermasalah. Admin akan segera memperbaiki.');
+                }
+            } catch (error) {
+                console.error('Test connection failed:', error);
+            }
+        });
     </script>
 </body>
 </html>
