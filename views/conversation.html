@@ -3,13 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Detail Percakapan - NGL Clone</title>
+    <title>Admin - Detail Percakapan</title>
     <link rel="stylesheet" href="/style.css">
+    <style>
+        .sender-info {
+            background: rgba(0,0,0,0.05);
+            border-radius: 8px;
+            padding: 8px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sender-info small {
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .user-meta {
+            background: linear-gradient(135deg, #667eea10, #764ba210);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
 </head>
 <body>
     <div class="nav-bar">
         <div class="nav-content">
-            <h2>💬 Detail Percakapan</h2>
+            <h2>📊 Admin Dashboard</h2>
             <div class="nav-links">
                 <a href="/admin" class="back-btn">← Kembali</a>
                 <form method="POST" action="/admin/logout" style="display: inline;">
@@ -20,14 +44,14 @@
     </div>
 
     <div class="container">
-        <div class="card">
-            <h3>Session ID:</h3>
-            <p style="word-break: break-all; background: #f8f9fa; padding: 15px; border-radius: 12px;">{{sessionId}}</p>
+        <div class="user-meta">
+            <h3>👤 User: @{{username}}</h3>
+            <p><strong>Status:</strong> {{isPro}}</p>
             <p><strong>Dimulai:</strong> {{createdAt}}</p>
         </div>
         
         <div class="card">
-            <h3>Riwayat Pesan</h3>
+            <h3>💬 Riwayat Pesan</h3>
             <div id="messagesContainer" class="messages-container">
                 {{messages}}
             </div>
@@ -45,13 +69,11 @@
     </div>
 
     <script>
-        // Auto scroll ke bawah
         const container = document.getElementById('messagesContainer');
         if (container) {
             container.scrollTop = container.scrollHeight;
         }
 
-        // Auto refresh setiap 10 detik untuk lihat pesan baru
         setInterval(() => {
             window.location.reload();
         }, 10000);
