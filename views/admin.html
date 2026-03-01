@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - NGL Clone</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <h2>📊 Admin Dashboard</h2>
+            <div class="nav-links">
+                <a href="/admin">Dashboard</a>
+                <form method="POST" action="/admin/logout" style="display: inline;">
+                    <button type="submit" class="btn-danger" style="padding: 8px 16px; width: auto;">Logout</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2 style="margin-bottom: 20px;">📨 Semua Percakapan</h2>
+        
+        <div id="conversationsList">
+            {{conversations}}
+        </div>
+    </div>
+
+    <script>
+        // Auto refresh untuk notifikasi pesan baru
+        setInterval(async () => {
+            // Reload halaman setiap 30 detik
+            window.location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

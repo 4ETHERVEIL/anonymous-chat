@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGL Clone - Kirim Pesan Anonymous</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="nav-bar">
+        <div class="nav-content">
+            <h2>📱 NGL Clone</h2>
+            <div class="nav-links">
+                <span style="color: #666;">Anonymous</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h3>🔗 Link Anonymous Kamu</h3>
+            <div class="link-info" id="userLink">
+                https://ngl-clone.vercel.app/?user={{userId}}
+            </div>
+            <p style="text-align: center; margin-top: 10px; color: #666; font-size: 0.9rem;">
+                Bagikan link ini ke teman-temanmu
+            </p>
+        </div>
+        
+        <div class="card">
+            <h3>📝 Kirim Pesan Anonymous</h3>
+            <p style="color: #666; margin-bottom: 16px;">Pesanmu akan tetap rahasia. Admin akan membalas jika ada pesan masuk.</p>
+            
+            <div class="form-group">
+                <textarea id="messageInput" rows="4" placeholder="Ketik pesanmu di sini..."></textarea>
+            </div>
+            
+            <button onclick="sendMessage()" id="sendBtn">Kirim Pesan</button>
+        </div>
+        
+        <div class="card">
+            <h3>💬 Pesan Masuk</h3>
+            <div id="messagesContainer" class="messages-container">
+                {{messages}}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sendBtn = document.getElementById('sendBtn');
+        const messageInput = document.getElementById('messageInput');
+        const messagesContainer = document.getElementById('messagesContainer');
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                alert('Pesan tidak boleh kosong!');
+                return;
+            }
+            
+            // Disable button while sending
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Mengirim...';
+            
+            try {
+                const response = await fetch('/send-message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                if (response.ok) {
+                    messageInput.value = '';
+                    loadMessages();
+                } else {
+                    alert('Gagal mengirim pesan. Coba lagi.');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Kirim Pesan';
+            }
+        }
+        
+        async function loadMessages() {
+            try {
+                const response = await fetch('/api/messages');
+                const data = await response.json();
+                
+                if (data.messages && data.messages.length > 0) {
+                    messagesContainer.innerHTML = data.messages.map(msg => {
+                        const date = new Date(msg.created_at);
+                        const timeStr = date.toLocaleString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        
+                        return `
+                            <div class="message-bubble ${msg.is_admin_reply ? 'admin-message' : 'user-message'}">
+                                <div>${msg.message}</div>
+                                <div class="message-time">${timeStr}</div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Auto scroll ke bawah
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+        
+        // Auto refresh setiap 3 detik
+        setInterval(loadMessages, 3000);
+        
+        // Load pesan pertama kali
+        loadMessages();
+        
+        // Kirim dengan Enter (Shift+Enter untuk new line)
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
