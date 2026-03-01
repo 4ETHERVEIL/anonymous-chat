@@ -281,22 +281,6 @@ button:disabled {
     background: linear-gradient(135deg, #5a6268, #343a40);
 }
 
-/* Typography */
-h1, h2, h3, h4 {
-    color: #333;
-    margin-bottom: 15px;
-}
-
-p {
-    margin-bottom: 10px;
-    color: #666;
-}
-
-small {
-    color: #999;
-    font-size: 0.85rem;
-}
-
 /* Responsive */
 @media (max-width: 600px) {
     .container {
@@ -323,16 +307,6 @@ small {
     button {
         padding: 14px 24px;
     }
-}
-
-/* Loading Animation */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-.loading {
-    animation: pulse 1.5s infinite;
 }
 
 /* Scrollbar Styling */
