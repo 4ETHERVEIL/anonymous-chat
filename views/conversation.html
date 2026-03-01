@@ -13,7 +13,7 @@
             <div class="nav-links">
                 <a href="/admin" class="back-btn">← Kembali</a>
                 <form method="POST" action="/admin/logout" style="display: inline;">
-                    <button type="submit" class="btn-danger" style="padding: 8px 16px; width: auto;">Logout</button>
+                    <button type="submit" class="btn-danger" style="padding: 10px 20px; width: auto;">Logout</button>
                 </form>
             </div>
         </div>
@@ -22,7 +22,7 @@
     <div class="container">
         <div class="card">
             <h3>Session ID:</h3>
-            <p style="word-break: break-all; background: #f0f2f5; padding: 10px; border-radius: 8px;">{{sessionId}}</p>
+            <p style="word-break: break-all; background: #f8f9fa; padding: 15px; border-radius: 12px;">{{sessionId}}</p>
             <p><strong>Dimulai:</strong> {{createdAt}}</p>
         </div>
         
@@ -47,7 +47,14 @@
     <script>
         // Auto scroll ke bawah
         const container = document.getElementById('messagesContainer');
-        container.scrollTop = container.scrollHeight;
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Auto refresh setiap 10 detik untuk lihat pesan baru
+        setInterval(() => {
+            window.location.reload();
+        }, 10000);
     </script>
 </body>
 </html>
