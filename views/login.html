@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGL Clone - Login dengan Username</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            text-align: center;
+        }
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .login-card {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 30px;
+            padding: 40px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+        }
+        .login-card h1 {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .instagram-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 50px;
+            margin: 20px 0;
+            font-size: 0.9rem;
+        }
+        .instagram-note img {
+            width: 24px;
+            height: 24px;
+        }
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+        .feature {
+            text-align: center;
+        }
+        .feature span {
+            font-size: 1.5rem;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .feature small {
+            color: #999;
+            font-size: 0.8rem;
+        }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container login-container">
+        <div class="logo">📱</div>
+        <h1 style="font-size: 2.5rem; margin-bottom: 10px;">NGL Clone</h1>
+        <div class="subtitle">Anonymous Messaging</div>
+        
+        <div class="login-card">
+            <h1>Masuk dengan Username</h1>
+            <p style="color: #666; margin-bottom: 25px;">Gunakan username Instagram atau nama apa saja</p>
+            
+            <div class="instagram-note">
+                <span>📸</span>
+                <span>Seperti NGL asli - cukup masukkan username!</span>
+            </div>
+            
+            <div class="error-message" id="errorMessage"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        placeholder="Masukkan username kamu" 
+                        required 
+                        autofocus
+                        style="text-align: center; font-size: 1.2rem;"
+                    >
+                </div>
+                
+                <button type="submit" id="loginBtn">
+                    Mulai Chat Anonymous
+                </button>
+            </form>
+            
+            <div class="features">
+                <div class="feature">
+                    <span>🔒</span>
+                    <small>Anonymous</small>
+                </div>
+                <div class="feature">
+                    <span>⚡</span>
+                    <small>Real-time</small>
+                </div>
+                <div class="feature">
+                    <span>⭐</span>
+                    <small>Pro Features</small>
+                </div>
+            </div>
+            
+            <p style="margin-top: 25px; color: #999; font-size: 0.85rem;">
+                Dengan melanjutkan, kamu menyetujui Terms of Service
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const loginBtn = document.getElementById('loginBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = usernameInput.value.trim();
+            
+            if (!username) {
+                showError('Username tidak boleh kosong!');
+                return;
+            }
+            
+            if (username.length < 3) {
+                showError('Username minimal 3 karakter');
+                return;
+            }
+            
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Memproses...';
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username })
+                });
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    const data = await response.json();
+                    showError(data.error || 'Terjadi kesalahan');
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Mulai Chat Anonymous';
+                }
+            } catch (error) {
+                showError('Error: ' + error.message);
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Mulai Chat Anonymous';
+            }
+        });
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
