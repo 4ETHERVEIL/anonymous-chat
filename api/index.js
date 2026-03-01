@@ -6,7 +6,6 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const UserAgent = require('user-agents');
-const ip = require('ip');
 
 const app = express();
 
@@ -22,8 +21,6 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/style.css', express.static(path.join(__dirname, '../public/style.css')));
-app.use('/css', express.static(path.join(__dirname, '../public/css')));
-app.use('/public', express.static(path.join(__dirname, '../public')));
 
 // ============ SESSION CONFIGURATION ============
 app.use(
@@ -46,12 +43,11 @@ app.use(
 // ============ INITIALIZE DATABASE TABLES ============
 async function initDatabase() {
   try {
-    // Create users table (untuk username login)
+    // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        instagram_handle VARCHAR(255),
         is_pro BOOLEAN DEFAULT FALSE,
         pro_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -69,7 +65,7 @@ async function initDatabase() {
       )
     `);
 
-    // Create messages table (tambah kolom untuk pro features)
+    // Create messages table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
@@ -82,18 +78,6 @@ async function initDatabase() {
         sender_location VARCHAR(255),
         sender_device VARCHAR(255),
         sender_isp VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create payments table (untuk pro subscription)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS payments (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        amount DECIMAL(10,2),
-        payment_method VARCHAR(50),
-        transaction_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -124,13 +108,12 @@ function formatDate(date) {
 // Fungsi untuk mendapatkan info pengirim dari IP
 async function getSenderInfo(ipAddress) {
   try {
-    // Gunakan API gratis untuk geolocation
     const response = await axios.get(`http://ip-api.com/json/${ipAddress}`);
     if (response.data && response.data.status === 'success') {
       return {
         location: `${response.data.city}, ${response.data.country}`,
         isp: response.data.isp,
-        device: new UserAgent().toString() // Random user agent
+        device: new UserAgent().toString()
       };
     }
   } catch (error) {
@@ -144,7 +127,7 @@ async function getSenderInfo(ipAddress) {
   };
 }
 
-// Fungsi untuk generate auto messages (seperti NGL asli)
+// Fungsi untuk generate auto messages
 function generateAutoMessage() {
   const messages = [
     "I've had a crush on you for years 😊",
@@ -197,33 +180,40 @@ app.post('/login', async (req, res) => {
     req.session.username = username;
     req.session.isPro = user.rows[0].is_pro;
 
-    // Buat atau update conversation
+    // Buat session ID untuk chat
     const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+    
+    // Simpan conversation
     await pool.query(
-      'INSERT INTO conversations (user_id, session_id) VALUES ($1, $2) ON CONFLICT (session_id) DO NOTHING',
+      'INSERT INTO conversations (user_id, session_id) VALUES ($1, $2)',
       [user.rows[0].id, sessionId]
     );
 
-    // Generate auto message (seperti NGL asli) - 30% chance
+    req.session.sessionId = sessionId;
+
+    // Generate auto message (30% chance)
     if (Math.random() < 0.3) {
-      const autoMessage = generateAutoMessage();
       const conversation = await pool.query(
         'SELECT id FROM conversations WHERE session_id = $1',
         [sessionId]
       );
       
+      const autoMessage = generateAutoMessage();
+      
       await pool.query(
         `INSERT INTO messages 
-         (conversation_id, message, is_auto_generated, sender_ip, sender_location, sender_device, sender_isp) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [conversation.rows[0].id, autoMessage, true, 'auto-generated', 'System', 'NGL Bot', 'System']
+         (conversation_id, message, is_auto_generated, sender_location, sender_device, sender_isp) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [conversation.rows[0].id, autoMessage, true, 'System', 'NGL Bot', 'System']
       );
     }
 
+    // Redirect ke halaman chat
     res.redirect(`/chat/${sessionId}`);
+    
   } catch (error) {
     console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
+    res.status(500).json({ error: 'Server Error: ' + error.message });
   }
 });
 
@@ -239,7 +229,7 @@ app.get('/chat/:sessionId', async (req, res) => {
 
     // Ambil pesan
     const messages = await pool.query(
-      `SELECT m.*, c.session_id, u.is_pro 
+      `SELECT m.*, c.session_id, u.is_pro, u.username
        FROM messages m
        JOIN conversations c ON m.conversation_id = c.id
        JOIN users u ON c.user_id = u.id
@@ -260,11 +250,10 @@ app.get('/chat/:sessionId', async (req, res) => {
             <span>📍 ${msg.sender_location || 'Unknown'}</span>
             <span>📱 ${msg.sender_device ? msg.sender_device.substring(0, 30) + '...' : 'Unknown'}</span>
             <span>🌐 ${msg.sender_isp || 'Unknown'}</span>
-            ${msg.sender_ip ? `<span>🔍 IP: ${msg.sender_ip}</span>` : ''}
           </div>
         `;
       } else if (msg.is_auto_generated) {
-        hintHtml = '<div class="message-hint system">🤖 Auto-generated (NGL System)</div>';
+        hintHtml = '<div class="message-hint system">🤖 Auto-generated</div>';
       }
       
       return `
@@ -276,10 +265,11 @@ app.get('/chat/:sessionId', async (req, res) => {
       `;
     }).join('');
 
-    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align: center; color: #999;">Belum ada pesan</p>');
-    html = html.replace('{{username}}', req.session.username);
-    html = html.replace('{{isPro}}', req.session.isPro ? 'Pro Member' : 'Free Member');
-    html = html.replace('{{sessionId}}', sessionId);
+    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align: center; color: #999; padding: 40px;">Belum ada pesan</p>');
+    html = html.replace(/{{username}}/g, req.session.username);
+    html = html.replace(/{{isPro}}/g, req.session.isPro ? 'Pro Member' : 'Free Member');
+    html = html.replace(/{{sessionId}}/g, sessionId);
+    html = html.replace('{{messagesCount}}', messages.rows.length);
 
     res.send(html);
   } catch (error) {
@@ -288,7 +278,7 @@ app.get('/chat/:sessionId', async (req, res) => {
   }
 });
 
-// Kirim pesan anonymous (dari pengirim)
+// Kirim pesan anonymous
 app.post('/send-message', async (req, res) => {
   try {
     const { message, sessionId } = req.body;
@@ -297,7 +287,6 @@ app.post('/send-message', async (req, res) => {
       return res.status(400).json({ error: 'Message tidak boleh kosong' });
     }
 
-    // Dapatkan conversation ID
     const conversation = await pool.query(
       'SELECT id FROM conversations WHERE session_id = $1',
       [sessionId]
@@ -307,11 +296,9 @@ app.post('/send-message', async (req, res) => {
       return res.status(404).json({ error: 'Session tidak ditemukan' });
     }
 
-    // Dapatkan info pengirim
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const senderInfo = await getSenderInfo(clientIp);
 
-    // Simpan pesan dengan info pengirim
     await pool.query(
       `INSERT INTO messages 
        (conversation_id, message, sender_ip, sender_location, sender_device, sender_isp) 
@@ -319,7 +306,6 @@ app.post('/send-message', async (req, res) => {
       [conversation.rows[0].id, message, clientIp, senderInfo.location, senderInfo.device, senderInfo.isp]
     );
 
-    // Update last activity
     await pool.query(
       'UPDATE conversations SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
       [conversation.rows[0].id]
@@ -351,10 +337,7 @@ app.get('/api/messages', async (req, res) => {
       [sessionId]
     );
 
-    res.json({ 
-      messages: messages.rows,
-      isPro: req.session.isPro || false
-    });
+    res.json({ messages: messages.rows });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -370,26 +353,20 @@ app.get('/upgrade', (req, res) => {
   }
   
   const html = readHtmlFile('upgrade.html');
-  res.send(html.replace('{{username}}', req.session.username));
+  res.send(html.replace(/{{username}}/g, req.session.username));
 });
 
-// Proses pembayaran (simulasi)
+// Proses upgrade (simulasi)
 app.post('/upgrade/pro', async (req, res) => {
   try {
     const userId = req.session.userId;
     
-    // Simulasi pembayaran sukses
     const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1); // 1 bulan
+    expiryDate.setMonth(expiryDate.getMonth() + 1);
 
     await pool.query(
       'UPDATE users SET is_pro = true, pro_expiry = $1 WHERE id = $2',
       [expiryDate, userId]
-    );
-
-    await pool.query(
-      'INSERT INTO payments (user_id, amount, payment_method, transaction_id) VALUES ($1, $2, $3, $4)',
-      [userId, 9.99, 'simulasi', 'TXN_' + Date.now()]
     );
 
     req.session.isPro = true;
@@ -401,10 +378,8 @@ app.post('/upgrade/pro', async (req, res) => {
   }
 });
 
-// ============ ADMIN ROUTES (SAMA SEPERTI SEBELUMNYA) ============
-// ... (kode admin routes tetap sama seperti sebelumnya)
+// ============ ADMIN ROUTES ============
 
-// Middleware untuk cek admin
 function isAdmin(req, res, next) {
   if (req.session.isAdmin) {
     next();
@@ -413,7 +388,6 @@ function isAdmin(req, res, next) {
   }
 }
 
-// Halaman login admin
 app.get('/admin/login', (req, res) => {
   if (req.session.isAdmin) {
     return res.redirect('/admin');
@@ -424,7 +398,6 @@ app.get('/admin/login', (req, res) => {
   res.send(html);
 });
 
-// Proses login admin
 app.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
   
@@ -438,13 +411,11 @@ app.post('/admin/login', (req, res) => {
   }
 });
 
-// Logout admin
 app.post('/admin/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/admin/login');
 });
 
-// Dashboard admin (dengan info pro users)
 app.get('/admin', isAdmin, async (req, res) => {
   try {
     const conversations = await pool.query(`
@@ -490,7 +461,6 @@ app.get('/admin', isAdmin, async (req, res) => {
   }
 });
 
-// Lihat detail percakapan (dengan info lengkap)
 app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
   try {
     const conversationId = req.params.id;
@@ -528,7 +498,7 @@ app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
             <small>📱 ${msg.sender_device ? msg.sender_device.substring(0, 50) + '...' : 'Unknown'}</small>
             <small>🌐 ${msg.sender_isp || 'Unknown'}</small>
             ${msg.sender_ip ? `<small>🔍 IP: ${msg.sender_ip}</small>` : ''}
-            ${msg.is_auto_generated ? '<small>🤖 AUTO-GENERATED</small>' : ''}
+            ${msg.is_auto_generated ? '<small>🤖 AUTO</small>' : ''}
           </div>
         `;
       }
@@ -555,7 +525,6 @@ app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
   }
 });
 
-// Balas pesan
 app.post('/admin/reply/:id', isAdmin, async (req, res) => {
   try {
     const conversationId = req.params.id;
