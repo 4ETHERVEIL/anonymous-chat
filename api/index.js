@@ -54,7 +54,7 @@ async function initDatabase() {
       )
     `);
 
-    // Create conversations table
+    // Create conversations table with user_id
     await pool.query(`
       CREATE TABLE IF NOT EXISTS conversations (
         id SERIAL PRIMARY KEY,
@@ -105,7 +105,6 @@ function formatDate(date) {
   });
 }
 
-// Fungsi untuk mendapatkan info pengirim dari IP
 async function getSenderInfo(ipAddress) {
   try {
     const response = await axios.get(`http://ip-api.com/json/${ipAddress}`);
@@ -119,7 +118,6 @@ async function getSenderInfo(ipAddress) {
   } catch (error) {
     console.error('Error getting sender info:', error.message);
   }
-  
   return {
     location: 'Unknown',
     isp: 'Unknown',
@@ -127,7 +125,6 @@ async function getSenderInfo(ipAddress) {
   };
 }
 
-// Fungsi untuk generate auto messages
 function generateAutoMessage() {
   const messages = [
     "I've had a crush on you for years 😊",
@@ -138,21 +135,18 @@ function generateAutoMessage() {
     "You make me smile every day",
     "I wish I could tell you who I am",
     "You're literally perfect",
-    "I love your vibe",
-    "You're so underrated"
+    "I love your vibe"
   ];
   return messages[Math.floor(Math.random() * messages.length)];
 }
 
 // ============ USER ROUTES ============
 
-// Halaman utama - Login dengan username
 app.get('/', (req, res) => {
   const html = readHtmlFile('login.html');
   res.send(html);
 });
 
-// Proses login dengan username
 app.post('/login', async (req, res) => {
   try {
     const { username } = req.body;
@@ -161,78 +155,75 @@ app.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username tidak boleh kosong' });
     }
 
-    // Cek apakah user sudah ada
+    // Cek user
     let user = await pool.query(
       'SELECT * FROM users WHERE username = $1',
       [username]
     );
 
     if (user.rows.length === 0) {
-      // Buat user baru
       user = await pool.query(
         'INSERT INTO users (username) VALUES ($1) RETURNING *',
         [username]
       );
     }
 
-    // Set session
-    req.session.userId = user.rows[0].id;
-    req.session.username = username;
-    req.session.isPro = user.rows[0].is_pro;
+    const userId = user.rows[0].id;
+    const isPro = user.rows[0].is_pro;
 
-    // Buat session ID untuk chat
-    const sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+    // Set session
+    req.session.userId = userId;
+    req.session.username = username;
+    req.session.isPro = isPro;
+
+    // Buat session ID unik
+    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(7);
     
     // Simpan conversation
     await pool.query(
       'INSERT INTO conversations (user_id, session_id) VALUES ($1, $2)',
-      [user.rows[0].id, sessionId]
+      [userId, sessionId]
     );
 
     req.session.sessionId = sessionId;
 
     // Generate auto message (30% chance)
     if (Math.random() < 0.3) {
-      const conversation = await pool.query(
+      const conv = await pool.query(
         'SELECT id FROM conversations WHERE session_id = $1',
         [sessionId]
       );
       
-      const autoMessage = generateAutoMessage();
+      const autoMsg = generateAutoMessage();
       
       await pool.query(
         `INSERT INTO messages 
          (conversation_id, message, is_auto_generated, sender_location, sender_device, sender_isp) 
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [conversation.rows[0].id, autoMessage, true, 'System', 'NGL Bot', 'System']
+        [conv.rows[0].id, autoMsg, true, 'System', 'NGL Bot', 'System']
       );
     }
 
-    // Redirect ke halaman chat
     res.redirect(`/chat/${sessionId}`);
     
   } catch (error) {
-    console.error(error);
+    console.error('Login error:', error);
     res.status(500).json({ error: 'Server Error: ' + error.message });
   }
 });
 
-// Halaman chat
 app.get('/chat/:sessionId', async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     
-    // Validasi session
     if (!req.session.userId) {
       return res.redirect('/');
     }
 
-    // Ambil pesan
     const messages = await pool.query(
-      `SELECT m.*, c.session_id, u.is_pro, u.username
+      `SELECT m.* 
        FROM messages m
        JOIN conversations c ON m.conversation_id = c.id
-       JOIN users u ON c.user_id = u.id
        WHERE c.session_id = $1
        ORDER BY m.created_at ASC`,
       [sessionId]
@@ -243,7 +234,6 @@ app.get('/chat/:sessionId', async (req, res) => {
     const messagesHtml = messages.rows.map(msg => {
       let hintHtml = '';
       
-      // Tampilkan hint hanya untuk user Pro
       if (req.session.isPro && !msg.is_admin_reply && !msg.is_auto_generated) {
         hintHtml = `
           <div class="message-hint">
@@ -265,7 +255,7 @@ app.get('/chat/:sessionId', async (req, res) => {
       `;
     }).join('');
 
-    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align: center; color: #999; padding: 40px;">Belum ada pesan</p>');
+    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align: center; color: #999;">Belum ada pesan</p>');
     html = html.replace(/{{username}}/g, req.session.username);
     html = html.replace(/{{isPro}}/g, req.session.isPro ? 'Pro Member' : 'Free Member');
     html = html.replace(/{{sessionId}}/g, sessionId);
@@ -278,7 +268,6 @@ app.get('/chat/:sessionId', async (req, res) => {
   }
 });
 
-// Kirim pesan anonymous
 app.post('/send-message', async (req, res) => {
   try {
     const { message, sessionId } = req.body;
@@ -318,7 +307,6 @@ app.post('/send-message', async (req, res) => {
   }
 });
 
-// API ambil pesan
 app.get('/api/messages', async (req, res) => {
   try {
     const { sessionId } = req.query;
@@ -328,10 +316,9 @@ app.get('/api/messages', async (req, res) => {
     }
 
     const messages = await pool.query(
-      `SELECT m.*, u.is_pro 
+      `SELECT m.* 
        FROM messages m
        JOIN conversations c ON m.conversation_id = c.id
-       JOIN users u ON c.user_id = u.id
        WHERE c.session_id = $1
        ORDER BY m.created_at ASC`,
       [sessionId]
@@ -344,9 +331,8 @@ app.get('/api/messages', async (req, res) => {
   }
 });
 
-// ============ PRO FEATURES ROUTES ============
+// ============ PRO ROUTES ============
 
-// Halaman upgrade ke Pro
 app.get('/upgrade', (req, res) => {
   if (!req.session.userId) {
     return res.redirect('/');
@@ -356,7 +342,6 @@ app.get('/upgrade', (req, res) => {
   res.send(html.replace(/{{username}}/g, req.session.username));
 });
 
-// Proses upgrade (simulasi)
 app.post('/upgrade/pro', async (req, res) => {
   try {
     const userId = req.session.userId;
@@ -424,35 +409,29 @@ app.get('/admin', isAdmin, async (req, res) => {
         u.username,
         u.is_pro,
         COUNT(m.id) as message_count,
-        SUM(CASE WHEN m.is_read = false AND m.is_admin_reply = false THEN 1 ELSE 0 END) as unread_count,
-        MAX(m.created_at) as last_message
+        SUM(CASE WHEN m.is_read = false AND m.is_admin_reply = false THEN 1 ELSE 0 END) as unread_count
       FROM conversations c
       JOIN users u ON c.user_id = u.id
       LEFT JOIN messages m ON c.id = m.conversation_id
       GROUP BY c.id, u.username, u.is_pro
-      ORDER BY last_message DESC NULLS LAST
+      ORDER BY c.last_activity DESC
     `);
 
     let html = readHtmlFile('admin.html');
     
     const conversationsHtml = conversations.rows.map(conv => `
       <div class="card" onclick="window.location.href='/admin/conversation/${conv.id}'" style="cursor: pointer;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <h3>@${conv.username} ${conv.is_pro ? '⭐ PRO' : ''}</h3>
-            <p>Pesan: ${conv.message_count || 0} 
-              ${conv.unread_count ? `<span class="badge">${conv.unread_count} baru</span>` : ''}
-            </p>
-            <small>Aktivitas terakhir: ${formatDate(conv.last_activity || conv.created_at)}</small>
-          </div>
-          <div>
-            <small>Dibuat: ${formatDate(conv.created_at)}</small>
-          </div>
+        <div>
+          <h3>@${conv.username} ${conv.is_pro ? '⭐ PRO' : ''}</h3>
+          <p>Pesan: ${conv.message_count || 0} 
+            ${conv.unread_count ? `<span class="badge">${conv.unread_count} baru</span>` : ''}
+          </p>
+          <small>Terakhir: ${formatDate(conv.last_activity)}</small>
         </div>
       </div>
     `).join('');
 
-    html = html.replace('{{conversations}}', conversationsHtml || '<div class="card"><p style="text-align: center;">Belum ada percakapan</p></div>');
+    html = html.replace('{{conversations}}', conversationsHtml || '<p>Belum ada percakapan</p>');
     
     res.send(html);
   } catch (error) {
@@ -472,10 +451,6 @@ app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
        WHERE c.id = $1`,
       [conversationId]
     );
-
-    if (conversation.rows.length === 0) {
-      return res.status(404).send('Percakapan tidak ditemukan');
-    }
 
     const messages = await pool.query(
       'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
@@ -497,7 +472,6 @@ app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
             <small>📍 ${msg.sender_location || 'Unknown'}</small>
             <small>📱 ${msg.sender_device ? msg.sender_device.substring(0, 50) + '...' : 'Unknown'}</small>
             <small>🌐 ${msg.sender_isp || 'Unknown'}</small>
-            ${msg.sender_ip ? `<small>🔍 IP: ${msg.sender_ip}</small>` : ''}
             ${msg.is_auto_generated ? '<small>🤖 AUTO</small>' : ''}
           </div>
         `;
@@ -529,10 +503,6 @@ app.post('/admin/reply/:id', isAdmin, async (req, res) => {
   try {
     const conversationId = req.params.id;
     const { message } = req.body;
-
-    if (!message || message.trim() === '') {
-      return res.redirect(`/admin/conversation/${conversationId}`);
-    }
 
     await pool.query(
       'INSERT INTO messages (conversation_id, message, is_admin_reply) VALUES ($1, $2, $3)',
