@@ -3,40 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - NGL Clone</title>
+    <title>Admin Dashboard</title>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="nav-bar">
         <div class="nav-content">
-            <h2>📊 Admin Dashboard</h2>
-            <div class="nav-links">
-                <a href="/admin">Dashboard</a>
-                <form method="POST" action="/admin/logout" style="display: inline;">
-                    <button type="submit" class="btn-danger" style="padding: 10px 20px; width: auto;">Logout</button>
-                </form>
-            </div>
+            <h2>📊 Admin</h2>
+            <form method="POST" action="/admin/logout">
+                <button type="submit" class="btn-danger" style="width:auto; padding:10px 20px;">Logout</button>
+            </form>
         </div>
     </div>
 
     <div class="container">
-        <h2 style="margin-bottom: 25px;">📨 Semua Percakapan</h2>
-        
-        <div id="conversationsList">
-            {{conversations}}
-        </div>
+        <h2>Daftar Percakapan</h2>
+        {{conversations}}
     </div>
 
     <script>
-        setTimeout(() => {
-            window.location.reload();
-        }, 30000);
-
-        document.querySelector('form[action="/admin/logout"]').addEventListener('submit', (e) => {
-            if (!confirm('Yakin ingin logout?')) {
-                e.preventDefault();
-            }
-        });
+        setTimeout(() => location.reload(), 30000);
     </script>
 </body>
 </html>
