@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@{{username}} - NGL</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="header">
+        <a href="/" style="color:white;">← Home</a>
+        <h1>📱 NGL</h1>
+        <div></div>
+    </div>
+
+    <div class="user-header">
+        <h2>@{{username}}</h2>
+        <p>tanya apa aja, anonim</p>
+    </div>
+
+    <div class="container">
+        {{message}}
+
+        <div class="card">
+            <form method="POST" action="/ask/{{username}}">
+                <div class="form-group">
+                    <textarea name="question" placeholder="Tulis pertanyaanmu..." required></textarea>
+                </div>
+                <button type="submit">Kirim!</button>
+            </form>
+
+            <div style="margin-top: 30px; color: #666; text-align: center;">
+                <p>✨ 228 kawan baru je tekan butang</p>
+                <p>Dapatkan pesan untuk dirimu sendiri!</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <a href="/">Buat link kamu sendiri →</a>
+        </div>
+    </div>
+</body>
+</html>
