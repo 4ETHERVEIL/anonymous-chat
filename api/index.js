@@ -18,7 +18,11 @@ const pool = new Pool({
 // ============ MIDDLEWARE ============
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// FIX: Static files untuk CSS
 app.use('/style.css', express.static(path.join(__dirname, '../public/style.css')));
+app.use('/css', express.static(path.join(__dirname, '../public/css')));
+app.use('/public', express.static(path.join(__dirname, '../public')));
 
 // ============ SESSION CONFIGURATION ============
 app.use(
