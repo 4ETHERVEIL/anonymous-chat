@@ -4,8 +4,6 @@ const { Pool } = require('pg');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
 const fs = require('fs');
-const axios = require('axios');
-const UserAgent = require('user-agents');
 
 const app = express();
 
@@ -22,39 +20,37 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/style.css', express.static(path.join(__dirname, '../public/style.css')));
 
-// ============ SESSION CONFIGURATION ============
+// ============ SESSION ============
 app.use(
   session({
     store: new pgSession({
       pool: pool,
-      tableName: 'sessions',
-      createTableIfMissing: true
+      tableName: 'sessions'
     }),
-    secret: process.env.SESSION_SECRET || 'rahasia-default-123',
+    secret: process.env.SESSION_SECRET || 'rahasia123',
     resave: false,
     saveUninitialized: true,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: false,
       maxAge: 30 * 24 * 60 * 60 * 1000
     }
   })
 );
 
-// ============ INITIALIZE DATABASE TABLES ============
-async function initDatabase() {
+// ============ INIT DATABASE ============
+async function initDB() {
   try {
-    // Create users table
+    // Users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
         is_pro BOOLEAN DEFAULT FALSE,
-        pro_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    // Create conversations table with user_id
+    // Conversations table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS conversations (
         id SERIAL PRIMARY KEY,
@@ -65,7 +61,7 @@ async function initDatabase() {
       )
     `);
 
-    // Create messages table
+    // Messages table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
@@ -73,86 +69,37 @@ async function initDatabase() {
         message TEXT NOT NULL,
         is_admin_reply BOOLEAN DEFAULT FALSE,
         is_read BOOLEAN DEFAULT FALSE,
-        is_auto_generated BOOLEAN DEFAULT FALSE,
-        sender_ip VARCHAR(45),
         sender_location VARCHAR(255),
-        sender_device VARCHAR(255),
-        sender_isp VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    console.log('✅ Database tables ready');
+    console.log('✅ Database ready');
   } catch (error) {
-    console.error('❌ Database init error:', error.message);
+    console.error('DB Error:', error.message);
   }
 }
+initDB();
 
-initDatabase();
-
-// ============ HELPER FUNCTIONS ============
-function readHtmlFile(filename) {
-  return fs.readFileSync(path.join(__dirname, '../views', filename), 'utf8');
+// ============ HELPERS ============
+function readHtml(file) {
+  return fs.readFileSync(path.join(__dirname, '../views', file), 'utf8');
 }
 
-function formatDate(date) {
-  const d = new Date(date);
-  return d.toLocaleString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
+// ============ ROUTES ============
 
-async function getSenderInfo(ipAddress) {
-  try {
-    const response = await axios.get(`http://ip-api.com/json/${ipAddress}`);
-    if (response.data && response.data.status === 'success') {
-      return {
-        location: `${response.data.city}, ${response.data.country}`,
-        isp: response.data.isp,
-        device: new UserAgent().toString()
-      };
-    }
-  } catch (error) {
-    console.error('Error getting sender info:', error.message);
-  }
-  return {
-    location: 'Unknown',
-    isp: 'Unknown',
-    device: 'Unknown'
-  };
-}
-
-function generateAutoMessage() {
-  const messages = [
-    "I've had a crush on you for years 😊",
-    "You're so beautiful/handsome!",
-    "I miss you so much",
-    "You're my favorite person",
-    "I think about you all the time",
-    "You make me smile every day",
-    "I wish I could tell you who I am",
-    "You're literally perfect",
-    "I love your vibe"
-  ];
-  return messages[Math.floor(Math.random() * messages.length)];
-}
-
-// ============ USER ROUTES ============
-
+// Home - Login page
 app.get('/', (req, res) => {
-  const html = readHtmlFile('login.html');
-  res.send(html);
+  res.send(readHtml('login.html'));
 });
 
+// Login process
 app.post('/login', async (req, res) => {
   try {
     const { username } = req.body;
     
     if (!username || username.trim() === '') {
-      return res.status(400).json({ error: 'Username tidak boleh kosong' });
+      return res.status(400).json({ error: 'Username wajib diisi' });
     }
 
     // Cek user
@@ -169,155 +116,100 @@ app.post('/login', async (req, res) => {
     }
 
     const userId = user.rows[0].id;
-    const isPro = user.rows[0].is_pro;
-
-    // Set session
-    req.session.userId = userId;
-    req.session.username = username;
-    req.session.isPro = isPro;
-
-    // Buat session ID unik
     const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(7);
-    
-    // Simpan conversation
+
+    // Buat conversation
     await pool.query(
       'INSERT INTO conversations (user_id, session_id) VALUES ($1, $2)',
       [userId, sessionId]
     );
 
+    // Set session
+    req.session.userId = userId;
+    req.session.username = username;
+    req.session.isPro = user.rows[0].is_pro;
     req.session.sessionId = sessionId;
 
-    // Generate auto message (30% chance)
-    if (Math.random() < 0.3) {
-      const conv = await pool.query(
-        'SELECT id FROM conversations WHERE session_id = $1',
-        [sessionId]
-      );
-      
-      const autoMsg = generateAutoMessage();
-      
-      await pool.query(
-        `INSERT INTO messages 
-         (conversation_id, message, is_auto_generated, sender_location, sender_device, sender_isp) 
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [conv.rows[0].id, autoMsg, true, 'System', 'NGL Bot', 'System']
-      );
-    }
-
     res.redirect(`/chat/${sessionId}`);
-    
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server Error: ' + error.message });
-  }
-});
-
-app.get('/chat/:sessionId', async (req, res) => {
-  try {
-    const sessionId = req.params.sessionId;
-    
-    if (!req.session.userId) {
-      return res.redirect('/');
-    }
-
-    const messages = await pool.query(
-      `SELECT m.* 
-       FROM messages m
-       JOIN conversations c ON m.conversation_id = c.id
-       WHERE c.session_id = $1
-       ORDER BY m.created_at ASC`,
-      [sessionId]
-    );
-
-    let html = readHtmlFile('chat.html');
-    
-    const messagesHtml = messages.rows.map(msg => {
-      let hintHtml = '';
-      
-      if (req.session.isPro && !msg.is_admin_reply && !msg.is_auto_generated) {
-        hintHtml = `
-          <div class="message-hint">
-            <span>📍 ${msg.sender_location || 'Unknown'}</span>
-            <span>📱 ${msg.sender_device ? msg.sender_device.substring(0, 30) + '...' : 'Unknown'}</span>
-            <span>🌐 ${msg.sender_isp || 'Unknown'}</span>
-          </div>
-        `;
-      } else if (msg.is_auto_generated) {
-        hintHtml = '<div class="message-hint system">🤖 Auto-generated</div>';
-      }
-      
-      return `
-        <div class="message-bubble ${msg.is_admin_reply ? 'admin-message' : 'user-message'}">
-          <div>${msg.message}</div>
-          <div class="message-time">${formatDate(msg.created_at)}</div>
-          ${hintHtml}
-        </div>
-      `;
-    }).join('');
-
-    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align: center; color: #999;">Belum ada pesan</p>');
-    html = html.replace(/{{username}}/g, req.session.username);
-    html = html.replace(/{{isPro}}/g, req.session.isPro ? 'Pro Member' : 'Free Member');
-    html = html.replace(/{{sessionId}}/g, sessionId);
-    html = html.replace('{{messagesCount}}', messages.rows.length);
-
-    res.send(html);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
-  }
-});
-
-app.post('/send-message', async (req, res) => {
-  try {
-    const { message, sessionId } = req.body;
-    
-    if (!message || message.trim() === '') {
-      return res.status(400).json({ error: 'Message tidak boleh kosong' });
-    }
-
-    const conversation = await pool.query(
-      'SELECT id FROM conversations WHERE session_id = $1',
-      [sessionId]
-    );
-
-    if (conversation.rows.length === 0) {
-      return res.status(404).json({ error: 'Session tidak ditemukan' });
-    }
-
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const senderInfo = await getSenderInfo(clientIp);
-
-    await pool.query(
-      `INSERT INTO messages 
-       (conversation_id, message, sender_ip, sender_location, sender_device, sender_isp) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [conversation.rows[0].id, message, clientIp, senderInfo.location, senderInfo.device, senderInfo.isp]
-    );
-
-    await pool.query(
-      'UPDATE conversations SET last_activity = CURRENT_TIMESTAMP WHERE id = $1',
-      [conversation.rows[0].id]
-    );
-
-    res.json({ success: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// Chat page
+app.get('/chat/:sessionId', async (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.redirect('/');
+    }
+
+    const sessionId = req.params.sessionId;
+
+    const messages = await pool.query(
+      `SELECT m.* FROM messages m
+       JOIN conversations c ON m.conversation_id = c.id
+       WHERE c.session_id = $1
+       ORDER BY m.created_at ASC`,
+      [sessionId]
+    );
+
+    let html = readHtml('chat.html');
+    
+    const messagesHtml = messages.rows.map(msg => {
+      let hint = '';
+      if (req.session.isPro && !msg.is_admin_reply) {
+        hint = `<small style="display:block; margin-top:5px;">📍 ${msg.sender_location || 'Unknown'}</small>`;
+      }
+      
+      return `
+        <div class="message-bubble ${msg.is_admin_reply ? 'admin-message' : 'user-message'}">
+          <div>${msg.message}</div>
+          <div class="message-time">${new Date(msg.created_at).toLocaleString()}</div>
+          ${hint}
+        </div>
+      `;
+    }).join('');
+
+    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align:center;">Belum ada pesan</p>');
+    html = html.replace(/{{username}}/g, req.session.username);
+    html = html.replace(/{{isPro}}/g, req.session.isPro ? 'Pro' : 'Free');
+    html = html.replace(/{{sessionId}}/g, sessionId);
+
+    res.send(html);
+  } catch (error) {
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+// Send message
+app.post('/send-message', async (req, res) => {
+  try {
+    const { message, sessionId } = req.body;
+
+    const conv = await pool.query(
+      'SELECT id FROM conversations WHERE session_id = $1',
+      [sessionId]
+    );
+
+    await pool.query(
+      'INSERT INTO messages (conversation_id, message, sender_location) VALUES ($1, $2, $3)',
+      [conv.rows[0].id, message, 'Jakarta, Indonesia']
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get messages API
 app.get('/api/messages', async (req, res) => {
   try {
     const { sessionId } = req.query;
     
-    if (!sessionId) {
-      return res.json({ messages: [] });
-    }
-
     const messages = await pool.query(
-      `SELECT m.* 
-       FROM messages m
+      `SELECT m.* FROM messages m
        JOIN conversations c ON m.conversation_id = c.id
        WHERE c.session_id = $1
        ORDER BY m.created_at ASC`,
@@ -326,45 +218,25 @@ app.get('/api/messages', async (req, res) => {
 
     res.json({ messages: messages.rows });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ============ PRO ROUTES ============
-
-app.get('/upgrade', (req, res) => {
-  if (!req.session.userId) {
-    return res.redirect('/');
-  }
-  
-  const html = readHtmlFile('upgrade.html');
-  res.send(html.replace(/{{username}}/g, req.session.username));
-});
-
-app.post('/upgrade/pro', async (req, res) => {
+// Upgrade to Pro
+app.post('/upgrade', async (req, res) => {
   try {
-    const userId = req.session.userId;
-    
-    const expiryDate = new Date();
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
-
     await pool.query(
-      'UPDATE users SET is_pro = true, pro_expiry = $1 WHERE id = $2',
-      [expiryDate, userId]
+      'UPDATE users SET is_pro = true WHERE id = $1',
+      [req.session.userId]
     );
-
     req.session.isPro = true;
-    
     res.redirect(`/chat/${req.session.sessionId}`);
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
+    res.status(500).send('Error');
   }
 });
 
-// ============ ADMIN ROUTES ============
-
+// ============ ADMIN ============
 function isAdmin(req, res, next) {
   if (req.session.isAdmin) {
     next();
@@ -377,21 +249,17 @@ app.get('/admin/login', (req, res) => {
   if (req.session.isAdmin) {
     return res.redirect('/admin');
   }
-  
-  let html = readHtmlFile('admin-login.html');
-  html = html.replace('{{error}}', '');
-  res.send(html);
+  res.send(readHtml('admin-login.html').replace('{{error}}', ''));
 });
 
 app.post('/admin/login', (req, res) => {
   const { username, password } = req.body;
-  
-  if (username === process.env.ADMIN_USERNAME && password === process.env.ADMIN_PASSWORD) {
+  if (username === 'admin' && password === 'admin123') {
     req.session.isAdmin = true;
     res.redirect('/admin');
   } else {
-    let html = readHtmlFile('admin-login.html');
-    html = html.replace('{{error}}', '<div class="error">Username atau password salah</div>');
+    let html = readHtml('admin-login.html');
+    html = html.replace('{{error}}', '<div class="error">Login gagal</div>');
     res.send(html);
   }
 });
@@ -402,118 +270,63 @@ app.post('/admin/logout', (req, res) => {
 });
 
 app.get('/admin', isAdmin, async (req, res) => {
-  try {
-    const conversations = await pool.query(`
-      SELECT 
-        c.*,
-        u.username,
-        u.is_pro,
-        COUNT(m.id) as message_count,
-        SUM(CASE WHEN m.is_read = false AND m.is_admin_reply = false THEN 1 ELSE 0 END) as unread_count
-      FROM conversations c
-      JOIN users u ON c.user_id = u.id
-      LEFT JOIN messages m ON c.id = m.conversation_id
-      GROUP BY c.id, u.username, u.is_pro
-      ORDER BY c.last_activity DESC
-    `);
+  const chats = await pool.query(`
+    SELECT c.*, u.username, COUNT(m.id) as msg_count,
+    SUM(CASE WHEN m.is_read=false AND m.is_admin_reply=false THEN 1 ELSE 0 END) as unread
+    FROM conversations c
+    JOIN users u ON c.user_id = u.id
+    LEFT JOIN messages m ON c.id = m.conversation_id
+    GROUP BY c.id, u.username
+    ORDER BY c.last_activity DESC
+  `);
 
-    let html = readHtmlFile('admin.html');
-    
-    const conversationsHtml = conversations.rows.map(conv => `
-      <div class="card" onclick="window.location.href='/admin/conversation/${conv.id}'" style="cursor: pointer;">
-        <div>
-          <h3>@${conv.username} ${conv.is_pro ? '⭐ PRO' : ''}</h3>
-          <p>Pesan: ${conv.message_count || 0} 
-            ${conv.unread_count ? `<span class="badge">${conv.unread_count} baru</span>` : ''}
-          </p>
-          <small>Terakhir: ${formatDate(conv.last_activity)}</small>
-        </div>
-      </div>
-    `).join('');
+  let html = readHtml('admin.html');
+  
+  const listHtml = chats.rows.map(c => `
+    <div class="card" onclick="location.href='/admin/conversation/${c.id}'">
+      <h3>@${c.username} ${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</h3>
+      <p>Pesan: ${c.msg_count || 0}</p>
+      <small>${new Date(c.last_activity).toLocaleString()}</small>
+    </div>
+  `).join('');
 
-    html = html.replace('{{conversations}}', conversationsHtml || '<p>Belum ada percakapan</p>');
-    
-    res.send(html);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
-  }
+  html = html.replace('{{conversations}}', listHtml || '<p>Belum ada</p>');
+  res.send(html);
 });
 
 app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
-  try {
-    const conversationId = req.params.id;
+  const messages = await pool.query(
+    'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at',
+    [req.params.id]
+  );
 
-    const conversation = await pool.query(
-      `SELECT c.*, u.username, u.is_pro 
-       FROM conversations c
-       JOIN users u ON c.user_id = u.id
-       WHERE c.id = $1`,
-      [conversationId]
-    );
+  await pool.query(
+    'UPDATE messages SET is_read=true WHERE conversation_id=$1 AND is_admin_reply=false',
+    [req.params.id]
+  );
 
-    const messages = await pool.query(
-      'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC',
-      [conversationId]
-    );
+  let html = readHtml('admin-conversation.html');
+  
+  const msgHtml = messages.rows.map(m => `
+    <div class="message-bubble ${m.is_admin_reply ? 'admin-message' : 'user-message'}">
+      <div>${m.message}</div>
+      <div class="message-time">${new Date(m.created_at).toLocaleString()}</div>
+      ${m.sender_location ? `<small>📍 ${m.sender_location}</small>` : ''}
+    </div>
+  `).join('');
 
-    await pool.query(
-      'UPDATE messages SET is_read = true WHERE conversation_id = $1 AND is_admin_reply = false',
-      [conversationId]
-    );
-
-    let html = readHtmlFile('admin-conversation.html');
-    
-    const messagesHtml = messages.rows.map(msg => {
-      let infoHtml = '';
-      if (!msg.is_admin_reply) {
-        infoHtml = `
-          <div class="sender-info">
-            <small>📍 ${msg.sender_location || 'Unknown'}</small>
-            <small>📱 ${msg.sender_device ? msg.sender_device.substring(0, 50) + '...' : 'Unknown'}</small>
-            <small>🌐 ${msg.sender_isp || 'Unknown'}</small>
-            ${msg.is_auto_generated ? '<small>🤖 AUTO</small>' : ''}
-          </div>
-        `;
-      }
-      
-      return `
-        <div class="message-bubble ${msg.is_admin_reply ? 'admin-message' : 'user-message'}">
-          <div>${msg.message}</div>
-          <div class="message-time">${formatDate(msg.created_at)}</div>
-          ${infoHtml}
-        </div>
-      `;
-    }).join('');
-
-    html = html.replace('{{conversationId}}', conversationId);
-    html = html.replace('{{username}}', conversation.rows[0].username);
-    html = html.replace('{{isPro}}', conversation.rows[0].is_pro ? '⭐ Pro Member' : 'Free Member');
-    html = html.replace('{{createdAt}}', formatDate(conversation.rows[0].created_at));
-    html = html.replace('{{messages}}', messagesHtml);
-
-    res.send(html);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
-  }
+  html = html.replace('{{messages}}', msgHtml);
+  html = html.replace('{{conversationId}}', req.params.id);
+  
+  res.send(html);
 });
 
 app.post('/admin/reply/:id', isAdmin, async (req, res) => {
-  try {
-    const conversationId = req.params.id;
-    const { message } = req.body;
-
-    await pool.query(
-      'INSERT INTO messages (conversation_id, message, is_admin_reply) VALUES ($1, $2, $3)',
-      [conversationId, message, true]
-    );
-
-    res.redirect(`/admin/conversation/${conversationId}`);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Server Error: ' + error.message);
-  }
+  await pool.query(
+    'INSERT INTO messages (conversation_id, message, is_admin_reply) VALUES ($1, $2, $3)',
+    [req.params.id, req.body.message, true]
+  );
+  res.redirect(`/admin/conversation/${req.params.id}`);
 });
 
 module.exports = app;
