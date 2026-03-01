@@ -6,8 +6,9 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
+const BASE_URL = 'https://anonymous-chat-omega.vercel.app';
 
-// ============ DATABASE CONNECTION ============
+// ============ DATABASE ============
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
@@ -31,7 +32,7 @@ app.use(
     resave: false,
     saveUninitialized: true,
     cookie: {
-      secure: false,
+      secure: true,
       maxAge: 30 * 24 * 60 * 60 * 1000
     }
   })
@@ -45,19 +46,7 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        is_pro BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Conversations table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS conversations (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        session_id VARCHAR(255) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -65,12 +54,12 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
-        conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
-        message TEXT NOT NULL,
-        is_admin_reply BOOLEAN DEFAULT FALSE,
+        username VARCHAR(255) NOT NULL,
+        question TEXT NOT NULL,
+        answer TEXT,
         is_read BOOLEAN DEFAULT FALSE,
-        sender_location VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        answered_at TIMESTAMP
       )
     `);
 
@@ -86,15 +75,34 @@ function readHtml(file) {
   return fs.readFileSync(path.join(__dirname, '../views', file), 'utf8');
 }
 
+function formatDate(date) {
+  const d = new Date(date);
+  const now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  
+  if (diff < 60) return `${diff} detik lalu`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} menit lalu`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} jam lalu`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} hari lalu`;
+  return `${Math.floor(diff / 2592000)} bulan lalu`;
+}
+
 // ============ ROUTES ============
 
-// Home - Login page
+// Halaman utama
 app.get('/', (req, res) => {
-  res.send(readHtml('login.html'));
+  let html = readHtml('index.html');
+  
+  if (req.session.username) {
+    return res.redirect(`/inbox/${req.session.username}`);
+  }
+  
+  html = html.replace(/{{BASE_URL}}/g, BASE_URL);
+  res.send(html);
 });
 
-// Login process
-app.post('/login', async (req, res) => {
+// Register username
+app.post('/register', async (req, res) => {
   try {
     const { username } = req.body;
     
@@ -102,137 +110,187 @@ app.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Username wajib diisi' });
     }
 
-    // Cek user
+    const cleanUsername = username.toLowerCase().trim().replace(/\s+/g, '');
+    
     let user = await pool.query(
       'SELECT * FROM users WHERE username = $1',
-      [username]
+      [cleanUsername]
     );
 
     if (user.rows.length === 0) {
-      user = await pool.query(
-        'INSERT INTO users (username) VALUES ($1) RETURNING *',
-        [username]
+      await pool.query(
+        'INSERT INTO users (username) VALUES ($1)',
+        [cleanUsername]
       );
     }
 
-    const userId = user.rows[0].id;
-    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(7);
-
-    // Buat conversation
-    await pool.query(
-      'INSERT INTO conversations (user_id, session_id) VALUES ($1, $2)',
-      [userId, sessionId]
-    );
-
-    // Set session
-    req.session.userId = userId;
-    req.session.username = username;
-    req.session.isPro = user.rows[0].is_pro;
-    req.session.sessionId = sessionId;
-
-    res.redirect(`/chat/${sessionId}`);
+    req.session.username = cleanUsername;
+    
+    res.json({ 
+      success: true, 
+      username: cleanUsername,
+      redirect: `/inbox/${cleanUsername}`,
+      link: `${BASE_URL}/ask/${cleanUsername}`
+    });
+    
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Chat page
-app.get('/chat/:sessionId', async (req, res) => {
+// Halaman tanya (public)
+app.get('/ask/:username', async (req, res) => {
   try {
-    if (!req.session.userId) {
+    const username = req.params.username.toLowerCase();
+    
+    const user = await pool.query(
+      'SELECT * FROM users WHERE username = $1',
+      [username]
+    );
+    
+    if (user.rows.length === 0) {
+      return res.status(404).send('User tidak ditemukan');
+    }
+    
+    let html = readHtml('ask.html');
+    html = html.replace(/{{username}}/g, username);
+    html = html.replace(/{{BASE_URL}}/g, BASE_URL);
+    html = html.replace('{{message}}', '');
+    
+    res.send(html);
+    
+  } catch (error) {
+    res.status(500).send('Error');
+  }
+});
+
+// Kirim pertanyaan
+app.post('/ask/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    const { question } = req.body;
+    
+    if (!question || question.trim() === '') {
+      let html = readHtml('ask.html');
+      html = html.replace(/{{username}}/g, username);
+      html = html.replace(/{{BASE_URL}}/g, BASE_URL);
+      html = html.replace('{{message}}', '<div class="error-message">Pertanyaan tidak boleh kosong</div>');
+      return res.send(html);
+    }
+    
+    await pool.query(
+      'INSERT INTO messages (username, question) VALUES ($1, $2)',
+      [username, question]
+    );
+    
+    let html = readHtml('ask.html');
+    html = html.replace(/{{username}}/g, username);
+    html = html.replace(/{{BASE_URL}}/g, BASE_URL);
+    html = html.replace('{{message}}', '<div class="success-message">✅ Pertanyaan terkirim!</div>');
+    
+    res.send(html);
+    
+  } catch (error) {
+    res.status(500).send('Error');
+  }
+});
+
+// Halaman inbox
+app.get('/inbox/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    
+    if (req.session.username !== username) {
       return res.redirect('/');
     }
-
-    const sessionId = req.params.sessionId;
-
+    
     const messages = await pool.query(
-      `SELECT m.* FROM messages m
-       JOIN conversations c ON m.conversation_id = c.id
-       WHERE c.session_id = $1
-       ORDER BY m.created_at ASC`,
-      [sessionId]
+      `SELECT * FROM messages 
+       WHERE username = $1 
+       ORDER BY created_at DESC`,
+      [username]
     );
-
-    let html = readHtml('chat.html');
+    
+    await pool.query(
+      'UPDATE messages SET is_read = true WHERE username = $1 AND is_read = false',
+      [username]
+    );
+    
+    let html = readHtml('inbox.html');
     
     const messagesHtml = messages.rows.map(msg => {
-      let hint = '';
-      if (req.session.isPro && !msg.is_admin_reply) {
-        hint = `<small style="display:block; margin-top:5px;">📍 ${msg.sender_location || 'Unknown'}</small>`;
-      }
+      const date = formatDate(msg.created_at);
+      const answered = msg.answer ? '✓ Dibalas' : '';
       
       return `
-        <div class="message-bubble ${msg.is_admin_reply ? 'admin-message' : 'user-message'}">
-          <div>${msg.message}</div>
-          <div class="message-time">${new Date(msg.created_at).toLocaleString()}</div>
-          ${hint}
+        <div class="message" id="msg-${msg.id}">
+          <p>${msg.question}</p>
+          ${msg.answer ? `<p style="color:#1877f2; margin-top:10px;">💬 ${msg.answer}</p>` : ''}
+          <div style="display:flex; justify-content:space-between; margin-top:10px;">
+            <small>${date}</small>
+            <small>${answered}</small>
+          </div>
+          ${!msg.answer ? `
+            <button onclick="answerMessage(${msg.id})" style="background:#4caf50; margin-top:10px; padding:8px;">
+              Balas
+            </button>
+          ` : ''}
         </div>
       `;
     }).join('');
-
-    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align:center;">Belum ada pesan</p>');
-    html = html.replace(/{{username}}/g, req.session.username);
-    html = html.replace(/{{isPro}}/g, req.session.isPro ? 'Pro' : 'Free');
-    html = html.replace(/{{sessionId}}/g, sessionId);
-
-    res.send(html);
-  } catch (error) {
-    res.status(500).send('Error: ' + error.message);
-  }
-});
-
-// Send message
-app.post('/send-message', async (req, res) => {
-  try {
-    const { message, sessionId } = req.body;
-
-    const conv = await pool.query(
-      'SELECT id FROM conversations WHERE session_id = $1',
-      [sessionId]
-    );
-
-    await pool.query(
-      'INSERT INTO messages (conversation_id, message, sender_location) VALUES ($1, $2, $3)',
-      [conv.rows[0].id, message, 'Jakarta, Indonesia']
-    );
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get messages API
-app.get('/api/messages', async (req, res) => {
-  try {
-    const { sessionId } = req.query;
     
-    const messages = await pool.query(
-      `SELECT m.* FROM messages m
-       JOIN conversations c ON m.conversation_id = c.id
-       WHERE c.session_id = $1
-       ORDER BY m.created_at ASC`,
-      [sessionId]
-    );
-
-    res.json({ messages: messages.rows });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Upgrade to Pro
-app.post('/upgrade', async (req, res) => {
-  try {
-    await pool.query(
-      'UPDATE users SET is_pro = true WHERE id = $1',
-      [req.session.userId]
-    );
-    req.session.isPro = true;
-    res.redirect(`/chat/${req.session.sessionId}`);
+    html = html.replace(/{{username}}/g, username);
+    html = html.replace(/{{BASE_URL}}/g, BASE_URL);
+    html = html.replace('{{messages}}', messagesHtml || '<p style="text-align:center; color:#999;">Belum ada pesan</p>');
+    html = html.replace('{{total}}', messages.rows.length);
+    html = html.replace('{{unread}}', messages.rows.filter(m => !m.is_read).length);
+    
+    res.send(html);
+    
   } catch (error) {
     res.status(500).send('Error');
+  }
+});
+
+// Balas pesan
+app.post('/answer/:id', async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const { answer } = req.body;
+    
+    await pool.query(
+      'UPDATE messages SET answer = $1, answered_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [answer, messageId]
+    );
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout
+app.post('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/');
+});
+
+// API get unread messages
+app.get('/api/messages/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase();
+    
+    const messages = await pool.query(
+      'SELECT COUNT(*) as total FROM messages WHERE username = $1 AND is_read = false',
+      [username]
+    );
+    
+    res.json({ unread: parseInt(messages.rows[0].total) });
+    
+  } catch (error) {
+    res.json({ unread: 0 });
   }
 });
 
@@ -246,10 +304,31 @@ function isAdmin(req, res, next) {
 }
 
 app.get('/admin/login', (req, res) => {
-  if (req.session.isAdmin) {
-    return res.redirect('/admin');
-  }
-  res.send(readHtml('admin-login.html').replace('{{error}}', ''));
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Login</title>
+        <link rel="stylesheet" href="/style.css">
+    </head>
+    <body style="display:flex; align-items:center;">
+        <div class="container">
+            <div class="card" style="max-width:400px; margin:0 auto;">
+                <h2 style="text-align:center;">🔐 Admin Login</h2>
+                <form method="POST" action="/admin/login">
+                    <div class="form-group">
+                        <input type="text" name="username" placeholder="Username" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="password" name="password" placeholder="Password" required>
+                    </div>
+                    <button type="submit">Login</button>
+                </form>
+            </div>
+        </div>
+    </body>
+    </html>
+  `);
 });
 
 app.post('/admin/login', (req, res) => {
@@ -258,75 +337,95 @@ app.post('/admin/login', (req, res) => {
     req.session.isAdmin = true;
     res.redirect('/admin');
   } else {
-    let html = readHtml('admin-login.html');
-    html = html.replace('{{error}}', '<div class="error">Login gagal</div>');
-    res.send(html);
+    res.redirect('/admin/login');
   }
+});
+
+app.get('/admin', isAdmin, async (req, res) => {
+  const users = await pool.query(`
+    SELECT u.username, COUNT(m.id) as total,
+    SUM(CASE WHEN m.is_read = false THEN 1 ELSE 0 END) as unread
+    FROM users u
+    LEFT JOIN messages m ON u.username = m.username
+    GROUP BY u.username
+    ORDER BY u.created_at DESC
+  `);
+  
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Dashboard</title>
+        <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <div class="header">
+            <h1>Admin Dashboard</h1>
+            <form method="POST" action="/admin/logout">
+                <button type="submit" style="background:#e41e3f; width:auto; padding:8px 20px;">Logout</button>
+            </form>
+        </div>
+        <div class="container">
+            <h2>Users</h2>
+  `;
+  
+  users.rows.forEach(u => {
+    html += `
+      <div class="card">
+        <h3>@${u.username} ${u.unread ? `<span class="badge">${u.unread} baru</span>` : ''}</h3>
+        <p>Total pesan: ${u.total || 0}</p>
+        <a href="/admin/user/${u.username}" style="color:#1877f2;">Lihat pesan →</a>
+      </div>
+    `;
+  });
+  
+  html += `</div></body></html>`;
+  res.send(html);
+});
+
+app.get('/admin/user/:username', isAdmin, async (req, res) => {
+  const username = req.params.username;
+  
+  const messages = await pool.query(
+    'SELECT * FROM messages WHERE username = $1 ORDER BY created_at DESC',
+    [username]
+  );
+  
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Pesan @${username}</title>
+        <link rel="stylesheet" href="/style.css">
+    </head>
+    <body>
+        <div class="header">
+            <a href="/admin" style="color:white;">← Kembali</a>
+            <h1>@${username}</h1>
+            <form method="POST" action="/admin/logout">
+                <button type="submit" style="background:#e41e3f; width:auto; padding:8px 20px;">Logout</button>
+            </form>
+        </div>
+        <div class="container">
+  `;
+  
+  messages.rows.forEach(m => {
+    html += `
+      <div class="message">
+        <p>${m.question}</p>
+        ${m.answer ? `<p style="color:#1877f2;">💬 ${m.answer}</p>` : ''}
+        <div class="message-time">${new Date(m.created_at).toLocaleString()}</div>
+      </div>
+    `;
+  });
+  
+  html += `</div></body></html>`;
+  res.send(html);
 });
 
 app.post('/admin/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/admin/login');
-});
-
-app.get('/admin', isAdmin, async (req, res) => {
-  const chats = await pool.query(`
-    SELECT c.*, u.username, COUNT(m.id) as msg_count,
-    SUM(CASE WHEN m.is_read=false AND m.is_admin_reply=false THEN 1 ELSE 0 END) as unread
-    FROM conversations c
-    JOIN users u ON c.user_id = u.id
-    LEFT JOIN messages m ON c.id = m.conversation_id
-    GROUP BY c.id, u.username
-    ORDER BY c.last_activity DESC
-  `);
-
-  let html = readHtml('admin.html');
-  
-  const listHtml = chats.rows.map(c => `
-    <div class="card" onclick="location.href='/admin/conversation/${c.id}'">
-      <h3>@${c.username} ${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</h3>
-      <p>Pesan: ${c.msg_count || 0}</p>
-      <small>${new Date(c.last_activity).toLocaleString()}</small>
-    </div>
-  `).join('');
-
-  html = html.replace('{{conversations}}', listHtml || '<p>Belum ada</p>');
-  res.send(html);
-});
-
-app.get('/admin/conversation/:id', isAdmin, async (req, res) => {
-  const messages = await pool.query(
-    'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at',
-    [req.params.id]
-  );
-
-  await pool.query(
-    'UPDATE messages SET is_read=true WHERE conversation_id=$1 AND is_admin_reply=false',
-    [req.params.id]
-  );
-
-  let html = readHtml('admin-conversation.html');
-  
-  const msgHtml = messages.rows.map(m => `
-    <div class="message-bubble ${m.is_admin_reply ? 'admin-message' : 'user-message'}">
-      <div>${m.message}</div>
-      <div class="message-time">${new Date(m.created_at).toLocaleString()}</div>
-      ${m.sender_location ? `<small>📍 ${m.sender_location}</small>` : ''}
-    </div>
-  `).join('');
-
-  html = html.replace('{{messages}}', msgHtml);
-  html = html.replace('{{conversationId}}', req.params.id);
-  
-  res.send(html);
-});
-
-app.post('/admin/reply/:id', isAdmin, async (req, res) => {
-  await pool.query(
-    'INSERT INTO messages (conversation_id, message, is_admin_reply) VALUES ($1, $2, $3)',
-    [req.params.id, req.body.message, true]
-  );
-  res.redirect(`/admin/conversation/${req.params.id}`);
 });
 
 module.exports = app;
