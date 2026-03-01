@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NGL Clone - Kirim Pesan Anonymous</title>
-    <link rel="stylesheet" href="public/style.css">
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="nav-bar">
         <div class="nav-content">
             <h2>📱 NGL Clone</h2>
             <div class="nav-links">
-                <span style="color: #666;">Anonymous</span>
+                <span style="color: #666;">Anonymous Chat</span>
             </div>
         </div>
     </div>
@@ -20,16 +20,16 @@
         <div class="card">
             <h3>🔗 Link Anonymous Kamu</h3>
             <div class="link-info" id="userLink">
-                https://ngl-clone.vercel.app/?user={{userId}}
+                https://anonymous-chat-omega.vercel.app/?user={{userId}}
             </div>
-            <p style="text-align: center; margin-top: 10px; color: #666; font-size: 0.9rem;">
-                Bagikan link ini ke teman-temanmu
+            <p style="text-align: center; margin-top: 15px; color: #666; font-size: 0.9rem;">
+                Bagikan link ini ke teman-temanmu untuk menerima pesan anonymous
             </p>
         </div>
         
         <div class="card">
             <h3>📝 Kirim Pesan Anonymous</h3>
-            <p style="color: #666; margin-bottom: 16px;">Pesanmu akan tetap rahasia. Admin akan membalas jika ada pesan masuk.</p>
+            <p style="color: #666; margin-bottom: 20px;">Pesanmu akan tetap rahasia. Admin akan membalas jika ada pesan masuk.</p>
             
             <div class="form-group">
                 <textarea id="messageInput" rows="4" placeholder="Ketik pesanmu di sini..."></textarea>
@@ -50,6 +50,16 @@
         const sendBtn = document.getElementById('sendBtn');
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.getElementById('messagesContainer');
+        const userLink = document.getElementById('userLink');
+
+        // Update link dengan domain saat ini secara dinamis
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentDomain = window.location.origin;
+            const userId = '{{userId}}';
+            if (userLink && userId) {
+                userLink.textContent = currentDomain + '/?user=' + userId;
+            }
+        });
 
         async function sendMessage() {
             const message = messageInput.value.trim();
@@ -59,9 +69,9 @@
                 return;
             }
             
-            // Disable button while sending
             sendBtn.disabled = true;
             sendBtn.textContent = 'Mengirim...';
+            sendBtn.classList.add('loading');
             
             try {
                 const response = await fetch('/send-message', {
@@ -75,14 +85,16 @@
                 if (response.ok) {
                     messageInput.value = '';
                     loadMessages();
+                    showNotification('Pesan terkirim!', 'success');
                 } else {
-                    alert('Gagal mengirim pesan. Coba lagi.');
+                    showNotification('Gagal mengirim pesan', 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showNotification('Error: ' + error.message, 'error');
             } finally {
                 sendBtn.disabled = false;
                 sendBtn.textContent = 'Kirim Pesan';
+                sendBtn.classList.remove('loading');
             }
         }
         
@@ -111,10 +123,36 @@
                     
                     // Auto scroll ke bawah
                     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                } else {
+                    messagesContainer.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">Belum ada pesan. Kirim pesan pertama!</p>';
                 }
             } catch (error) {
                 console.error('Error loading messages:', error);
             }
+        }
+        
+        // Fungsi notifikasi sederhana
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 25px;
+                background: ${type === 'success' ? '#4caf50' : '#f44336'};
+                color: white;
+                border-radius: 50px;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+                z-index: 1000;
+                animation: slideIn 0.3s ease-out;
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
         }
         
         // Auto refresh setiap 3 detik
@@ -130,6 +168,20 @@
                 sendMessage();
             }
         });
+
+        // Tambahkan style untuk animasi notifikasi
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
